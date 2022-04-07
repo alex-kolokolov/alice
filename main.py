@@ -2,6 +2,7 @@ from flask import Flask, request
 import logging
 import json
 import random
+import requests
 import os
 
 app = Flask(__name__)
@@ -26,9 +27,79 @@ cities = {
 sessionStorage = {}
 
 
+def get_coordinates(city_name):
+    try:
+        # url, по которому доступно API Яндекс.Карт
+        url = "https://geocode-maps.yandex.ru/1.x/"
+        # параметры запроса
+        params = {
+            "apikey": "40d1649f-0493-4b70-98ba-98533de7710b",
+            # город, координаты которого мы ищем
+            'geocode': city_name,
+            # формат ответа от сервера, в данном случае JSON
+            'format': 'json'
+        }
+        # отправляем запрос
+        response = requests.get(url, params)
+        # получаем JSON ответа
+        json = response.json()
+        # получаем координаты города
+        # (там написаны долгота(longitude), широта(latitude) через пробел)
+        # посмотреть подробное описание JSON-ответа можно
+        # в документации по адресу https://tech.yandex.ru/maps/geocoder/
+        coordinates_str = json['response']['GeoObjectCollection'][
+            'featureMember'][0]['GeoObject']['Point']['pos']
+        # Превращаем string в список, так как
+        # точка - это пара двух чисел - координат
+        long, lat = map(float, coordinates_str.split())
+        # Вернем ответ
+        return long, lat
+    except Exception as e:
+        return e
+
+
+def get_country(city_name):
+    try:
+        url = "https://geocode-maps.yandex.ru/1.x/"
+        params = {
+            "apikey": "40d1649f-0493-4b70-98ba-98533de7710b",
+            'geocode': city_name,
+            'format': 'json'
+        }
+        data = requests.get(url, params).json()
+        # все отличие тут, мы получаем имя страны
+        return data['response']['GeoObjectCollection'][
+            'featureMember'][0]['GeoObject']['metaDataProperty'][
+            'GeocoderMetaData']['AddressDetails']['Country']['CountryName']
+    except Exception as e:
+        return e
+
+
+import math
+
+
+def get_distance(p1, p2):
+    # p1 и p2 - это кортежи из двух элементов - координаты точек
+    radius = 6373.0
+
+    lon1 = math.radians(p1[0])
+    lat1 = math.radians(p1[1])
+    lon2 = math.radians(p2[0])
+    lat2 = math.radians(p2[1])
+
+    d_lon = lon2 - lon1
+    d_lat = lat2 - lat1
+
+    a = math.sin(d_lat / 2) ** 2 + math.cos(lat1) * math.cos(lat2) * math.sin(d_lon / 2) ** 2
+    c = 2 * math.atan2(a ** 0.5, (1 - a) ** 0.5)
+
+    distance = radius * c
+    return distance
+
+
 @app.route('/post', methods=['POST'])
 def main():
-    logging.info(f'Request: {request.json!r}')
+    logging.info('Request: %r', request.json)
     response = {
         'session': request.json['session'],
         'version': request.json['version'],
@@ -37,87 +108,39 @@ def main():
         }
     }
     handle_dialog(response, request.json)
-    logging.info(f'Response: {response!r}')
+    logging.info('Request: %r', response)
     return json.dumps(response)
 
 
 def handle_dialog(res, req):
     user_id = req['session']['user_id']
-
-    # если пользователь новый, то просим его представиться.
     if req['session']['new']:
-        res['response']['text'] = 'Привет! Назови свое имя!'
-        # создаем словарь в который в будущем положим имя пользователя
-        sessionStorage[user_id] = {
-            'first_name': None
-        }
+        res['response']['text'] = \
+            'Привет! Я могу показать город или сказать расстояние между городами!'
         return
-
-    # если пользователь не новый, то попадаем сюда.
-    # если поле имени пустое, то это говорит о том,
-    # что пользователь еще не представился.
-    if sessionStorage[user_id]['first_name'] is None:
-        # в последнем его сообщение ищем имя.
-        first_name = get_first_name(req)
-        # если не нашли, то сообщаем пользователю что не расслышали.
-        if first_name is None:
-            res['response']['text'] = \
-                'Не расслышала имя. Повтори, пожалуйста!'
-        # если нашли, то приветствуем пользователя.
-        # И спрашиваем какой город он хочет увидеть.
-        else:
-            sessionStorage[user_id]['first_name'] = first_name
-            res['response'][
-                'text'] = 'Приятно познакомиться, ' \
-                          + first_name.title() \
-                          + '. Я - Алиса. Какой город хочешь увидеть?'
-            # получаем варианты buttons из ключей нашего словаря cities
-            res['response']['buttons'] = [
-                {
-                    'title': city.title(),
-                    'hide': True
-                } for city in cities
-            ]
-    # если мы знакомы с пользователем и он нам что-то написал,
-    # то это говорит о том, что он уже говорит о городе,
-    # что хочет увидеть.
+    # Получаем города из нашего
+    cities = get_cities(req)
+    if not cities:
+        res['response']['text'] = 'Ты не написал название не одного города!'
+    elif len(cities) == 1:
+        res['response']['text'] = 'Этот город в стране - ' + \
+                                  get_country(cities[0])
+    elif len(cities) == 2:
+        distance = get_distance(get_coordinates(
+            cities[0]), get_coordinates(cities[1]))
+        res['response']['text'] = 'Расстояние между этими городами: ' + \
+                                  str(round(distance)) + ' км.'
     else:
-        # ищем город в сообщение от пользователя
-        city = get_city(req)
-        # если этот город среди известных нам,
-        # то показываем его (выбираем одну из двух картинок случайно)
-        if city in cities:
-            res['response']['card'] = {}
-            res['response']['card']['type'] = 'BigImage'
-            res['response']['card']['title'] = 'Этот город я знаю.'
-            res['response']['card']['image_id'] = random.choice(cities[city])
-            res['response']['text'] = 'Я угадал!'
-        # если не нашел, то отвечает пользователю
-        # 'Первый раз слышу об этом городе.'
-        else:
-            res['response']['text'] = \
-                'Первый раз слышу об этом городе. Попробуй еще разок!'
+        res['response']['text'] = 'Слишком много городов!'
 
 
-def get_city(req):
-    # перебираем именованные сущности
+def get_cities(req):
+    cities = []
     for entity in req['request']['nlu']['entities']:
-        # если тип YANDEX.GEO то пытаемся получить город(city),
-        # если нет, то возвращаем None
         if entity['type'] == 'YANDEX.GEO':
-            # возвращаем None, если не нашли сущности с типом YANDEX.GEO
-            return entity['value'].get('city', None)
-
-
-def get_first_name(req):
-    # перебираем сущности
-    for entity in req['request']['nlu']['entities']:
-        # находим сущность с типом 'YANDEX.FIO'
-        if entity['type'] == 'YANDEX.FIO':
-            # Если есть сущность с ключом 'first_name',
-            # то возвращаем ее значение.
-            # Во всех остальных случаях возвращаем None.
-            return entity['value'].get('first_name', None)
+            if 'city' in entity['value']:
+                cities.append(entity['value']['city'])
+    return cities
 
 
 if __name__ == '__main__':
