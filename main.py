@@ -1,100 +1,17 @@
 from flask import Flask, request
 import logging
 import json
-import random
-import requests
 import os
+# импортируем функции из нашего второго файла geo
+from geo import get_country, get_distance, get_coordinates
 
 app = Flask(__name__)
 
-logging.basicConfig(level=logging.INFO)
-
-# создаем словарь, в котором ключ — название города,
-# а значение — массив, где перечислены id картинок,
-# которые мы записали в прошлом пункте.
-
-cities = {
-    'москва': ['1540737/daa6e420d33102bf6947',
-               '213044/7df73ae4cc715175059e'],
-    'нью-йорк': ['1652229/728d5c86707054d4745f',
-                 '1030494/aca7ed7acefde2606bdc'],
-    'париж': ["1652229/f77136c2364eb90a3ea8",
-              '3450494/aca7ed7acefde22341bdc']
-}
-
-# создаем словарь, где для каждого пользователя
-# мы будем хранить его имя
-sessionStorage = {}
-
-
-def get_coordinates(city_name):
-    try:
-        # url, по которому доступно API Яндекс.Карт
-        url = "https://geocode-maps.yandex.ru/1.x/"
-        # параметры запроса
-        params = {
-            "apikey": "40d1649f-0493-4b70-98ba-98533de7710b",
-            # город, координаты которого мы ищем
-            'geocode': city_name,
-            # формат ответа от сервера, в данном случае JSON
-            'format': 'json'
-        }
-        # отправляем запрос
-        response = requests.get(url, params)
-        # получаем JSON ответа
-        json = response.json()
-        # получаем координаты города
-        # (там написаны долгота(longitude), широта(latitude) через пробел)
-        # посмотреть подробное описание JSON-ответа можно
-        # в документации по адресу https://tech.yandex.ru/maps/geocoder/
-        coordinates_str = json['response']['GeoObjectCollection'][
-            'featureMember'][0]['GeoObject']['Point']['pos']
-        # Превращаем string в список, так как
-        # точка - это пара двух чисел - координат
-        long, lat = map(float, coordinates_str.split())
-        # Вернем ответ
-        return long, lat
-    except Exception as e:
-        return e
-
-
-def get_country(city_name):
-    try:
-        url = "https://geocode-maps.yandex.ru/1.x/"
-        params = {
-            "apikey": "40d1649f-0493-4b70-98ba-98533de7710b",
-            'geocode': city_name,
-            'format': 'json'
-        }
-        data = requests.get(url, params).json()
-        # все отличие тут, мы получаем имя страны
-        return data['response']['GeoObjectCollection'][
-            'featureMember'][0]['GeoObject']['metaDataProperty'][
-            'GeocoderMetaData']['AddressDetails']['Country']['CountryName']
-    except Exception as e:
-        return e
-
-
-import math
-
-
-def get_distance(p1, p2):
-    # p1 и p2 - это кортежи из двух элементов - координаты точек
-    radius = 6373.0
-
-    lon1 = math.radians(p1[0])
-    lat1 = math.radians(p1[1])
-    lon2 = math.radians(p2[0])
-    lat2 = math.radians(p2[1])
-
-    d_lon = lon2 - lon1
-    d_lat = lat2 - lat1
-
-    a = math.sin(d_lat / 2) ** 2 + math.cos(lat1) * math.cos(lat2) * math.sin(d_lon / 2) ** 2
-    c = 2 * math.atan2(a ** 0.5, (1 - a) ** 0.5)
-
-    distance = radius * c
-    return distance
+# Добавляем логирование в файл.
+# Чтобы найти файл, перейдите на pythonwhere в раздел files,
+# он лежит в корневой папке
+logging.basicConfig(level=logging.INFO, filename='app.log',
+                    format='%(asctime)s %(levelname)s %(name)s %(message)s')
 
 
 @app.route('/post', methods=['POST'])
