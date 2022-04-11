@@ -4,6 +4,7 @@ import json
 from geo import get_country, get_distance, get_coordinates
 import os
 
+
 app = Flask(__name__)
 
 logging.basicConfig(level=logging.INFO, filename='app.log', format='%(asctime)s %(levelname)s %(name)s %(message)s')
@@ -34,7 +35,7 @@ def handle_dialog(res, req):
 
     if req['session']['new']:
 
-        res['response']['text'] = 'РџСЂРёРІРµС‚! РЇ РјРѕРіСѓ СЃРєР°Р·Р°С‚СЊ РІ РєР°РєРѕР№ СЃС‚СЂР°РЅРµ РіРѕСЂРѕРґ РёР»Рё СЃРєР°Р·Р°С‚СЊ СЂР°СЃСЃС‚РѕСЏРЅРёРµ РјРµР¶РґСѓ РіРѕСЂРѕРґР°РјРё!'
+        res['response']['text'] = 'Привет! Я могу сказать в какой стране город или сказать расстояние между городами!'
 
         return
 
@@ -42,20 +43,20 @@ def handle_dialog(res, req):
 
     if len(cities) == 0:
 
-        res['response']['text'] = 'РўС‹ РЅРµ РЅР°РїРёСЃР°Р» РЅР°Р·РІР°РЅРёРµ РЅРµ РѕРґРЅРѕРіРѕ РіРѕСЂРѕРґР°!'
+        res['response']['text'] = 'Ты не написал название не одного города!'
 
     elif len(cities) == 1:
 
-        res['response']['text'] = 'Р­С‚РѕС‚ РіРѕСЂРѕРґ РІ СЃС‚СЂР°РЅРµ - ' + get_country(cities[0])
+        res['response']['text'] = 'Этот город в стране - ' + get_country(cities[0])
 
     elif len(cities) == 2:
 
         distance = get_distance(get_coordinates(cities[0]), get_coordinates(cities[1]))
-        res['response']['text'] = 'Р Р°СЃСЃС‚РѕСЏРЅРёРµ РјРµР¶РґСѓ СЌС‚РёРјРё РіРѕСЂРѕРґР°РјРё: ' + str(round(distance)) + ' РєРј.'
+        res['response']['text'] = '� асстояние между этими городами: ' + str(round(distance)) + ' км.'
 
     else:
 
-        res['response']['text'] = 'РЎР»РёС€РєРѕРј РјРЅРѕРіРѕ РіРѕСЂРѕРґРѕРІ!'
+        res['response']['text'] = 'Слишком много городов!'
 
 
 def get_cities(req):
