@@ -8,7 +8,8 @@ def get_geo_info(city, type_info):
 
     params = {
         'geocode': city,
-        'format': 'json'
+        'format': 'json',
+         'apikey': "40d1649f-0493-4b70-98ba-98533de7710b"
     }
 
     response = requests.get(url, params)
